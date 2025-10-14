@@ -19,4 +19,10 @@ public class ActivityRecordController {
         ActivityRecordResponse response = activityRecordService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
+
+    @PostMapping("/delete")
+    public ResponseEntity<ActivityRecordResponse> delete(@RequestBody ActivityRecordDeleteRequest request) {
+        ActivityRecordResponse response = activityRecordService.deleteSchedule(request);
+        return ResponseEntity.ok(response);
+    }
 }

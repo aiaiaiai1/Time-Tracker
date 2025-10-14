@@ -50,6 +50,19 @@ public class ActivityRecordService {
         return buildMonthlyResponse(userId, request.date().substring(0, 6), "일정이 성공적으로 추가되었습니다.");
     }
 
+    public ActivityRecordResponse deleteSchedule(ActivityRecordDeleteRequest request) {
+        Long userId = tokenProcessor.parseToken(request.token());
+        LocalDateTime startTime = parseDateTime(request.date(), request.startTime());
+
+        ActivityRecord recordToDelete = activityRecordRepository.findByUserIdAndStartTime(userId, startTime)
+                .orElseThrow(() -> new IllegalArgumentException("해당 시간대 일정이 없습니다."));
+
+        String yearMonth = recordToDelete.getStartTime().format(DateTimeFormatter.ofPattern("yyyyMM"));
+        activityRecordRepository.delete(recordToDelete);
+
+        return buildMonthlyResponse(userId, yearMonth, "ok");
+    }
+
     private ActivityRecordResponse buildMonthlyResponse(Long userId, String yearMonthStr, String message) {
         YearMonth yearMonth = YearMonth.parse(yearMonthStr, DateTimeFormatter.ofPattern("yyyyMM"));
         LocalDate startDate = yearMonth.atDay(1);
