@@ -46,7 +46,7 @@ public final class TokenProcessor {
         return generateToken(userId, accessExpiredTime);
     }
 
-    private Long parseToken(String token) {
+    public Long parseToken(String token) {
         Claims payload = Jwts.parser()
                 .verifyWith(secretKey)
                 .build()
