@@ -40,4 +40,15 @@ public class AuthController {
             throw new IllegalArgumentException("회원가입 실패", e);
         }
     }
+
+    @PostMapping("/duplicate-check")
+    public ResponseEntity<DuplicateCheckResponse> duplicateCheck(@RequestBody DuplicateCheckRequest request) {
+        boolean isDuplicate = userRepository.existsByLoginId(request.email());
+
+        if (isDuplicate) {
+            return ResponseEntity.ok().body(DuplicateCheckResponse.ofFail());
+        } else {
+            return ResponseEntity.ok().body(DuplicateCheckResponse.ofSuccess());
+        }
+    }
 }
