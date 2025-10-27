@@ -8,8 +8,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ActivityRecordRepository extends JpaRepository<ActivityRecord, Long> {
-    List<ActivityRecord> findByUserIdAndStartTimeBetweenOrderByStartTimeAsc(Long userId, LocalDateTime start, LocalDateTime end);
-
     Optional<ActivityRecord> findByUserIdAndStartTime(Long userId, LocalDateTime startTime);
 
     @Query("SELECT CASE WHEN COUNT(r) > 0 THEN TRUE ELSE FALSE END FROM ActivityRecord r WHERE r.user.id = :userId AND r.startTime < :newEndTime AND r.endTime > :newStartTime")
@@ -18,4 +16,5 @@ public interface ActivityRecordRepository extends JpaRepository<ActivityRecord, 
     @Query("select ar from ActivityRecord ar where ar.user.id= :userId and ar.startTime >= :start and ar.endTime <= :end")
     List<ActivityRecord> findByUserIdAndBetweenTime(Long userId, LocalDateTime start, LocalDateTime end);
 
+    List<ActivityRecord> findByUserIdOrderByStartTimeAsc(Long userId);
 }
