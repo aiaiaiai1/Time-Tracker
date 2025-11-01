@@ -10,18 +10,18 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/")
+@RequestMapping("/api")
 public class AiReportController {
     private final TokenProcessor tokenProcessor;
     private final AiReportService aiReportService;
 
-    @PostMapping
+    @PostMapping("/ai")
     public ResponseEntity<AiReportResponse> getAiReport(@RequestBody AiReportRequest request) {
         Long userId = tokenProcessor.parseToken(request.token());
         String period = request.period();
 
-        String reportText = aiReportService.generateReport(userId, period);
+        AiReportResponse response = aiReportService.generateReport(userId, period);
 
-        return ResponseEntity.ok(AiReportResponse.of(reportText));
+        return ResponseEntity.ok(response);
     }
 }

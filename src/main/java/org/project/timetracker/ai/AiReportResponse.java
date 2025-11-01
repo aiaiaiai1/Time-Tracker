@@ -1,9 +1,13 @@
 package org.project.timetracker.ai;
 
 public record AiReportResponse(
-        String report
+        String totalSummary,
+        String comparisonReport,
+        String patternReport,
+        String suggestionReport
 ) {
-    public static AiReportResponse of(String report) {
-        return new AiReportResponse(report);
+
+    public static AiReportResponse fromMessage(String message) {
+        return new AiReportResponse(message, "", "", "");
     }
 }

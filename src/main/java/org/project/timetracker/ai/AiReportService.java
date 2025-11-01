@@ -26,7 +26,7 @@ public class AiReportService {
     private final ActivityRecordRepository activityRecordRepository;
     private final StatisticsCalculator statisticsCalculator;
 
-    private record ReportDateRages(
+    private record ReportDateRanges(
             LocalDateTime analysisStart, LocalDateTime analysisEnd,
             LocalDateTime comparisonStart, LocalDateTime comparisonEnd
     ) {}
@@ -42,7 +42,7 @@ public class AiReportService {
             String timeSlotSummary
     ) {}
 
-    public String generateReport(Long userId, String period) {
+    public AiReportResponse generateReport(Long userId, String period) {
         if ("last_week".equals(period)) {
             return generateLastWeekReport(userId);
         }
@@ -50,21 +50,47 @@ public class AiReportService {
         throw new IllegalArgumentException("잘못된 기간: " + period);
     }
 
-    private String generateLastWeekReport(Long userId) {
+    private AiReportResponse generateLastWeekReport(Long userId) {
         //날짜 계산
+        ReportDateRanges dateRanges = calculateLastWeekRanges();
 
         //데이터 조회
+        ReportData data = fetchReportData(userId, dateRanges);
+
+        if (data.analysisRecords().isEmpty()) {
+            return AiReportResponse.fromMessage("지난주에 기록된 활동 데이터가 없습니다. AI 리포트를 생성할 수 없습니다.");
+        }
 
         //데이터 요약
-
+        ReportSummaries summaries = summarizeReportData(data);
         //프롬프트 생성
-
+        String prompt = createPrompt(summaries);
         //AI 호출
+        String fullReport = chatModel.call(prompt);
 
-        return "임시응답";
+        int startIndex = fullReport.indexOf("REPORT_START");
+
+        if (startIndex == -1) {
+            return AiReportResponse.fromMessage(fullReport);
+        }
+
+        String cleanReport = fullReport.substring(startIndex + "REPORT_START".length());
+
+        String[] parts = cleanReport.split("---BREAK---");
+
+        if (parts.length < 4) {
+            return AiReportResponse.fromMessage(fullReport);
+        }
+
+        return new AiReportResponse(
+                parts[0].trim(), // 1. 총평
+                parts[1].trim(), // 2. 비교
+                parts[2].trim(), // 3. 패턴
+                parts[3].trim()  // 4. 제안
+        );
     }
 
-    private ReportDateRages calculateLastWeekRanges() {
+    private ReportDateRanges calculateLastWeekRanges() {
         LocalDate today = LocalDate.now();
 
         LocalDate lastWeekStart = today.minusWeeks(1)
@@ -77,7 +103,7 @@ public class AiReportService {
         LocalDate prevWeekEnd = today.minusWeeks(2)
                 .with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
 
-        return new ReportDateRages(
+        return new ReportDateRanges(
                 lastWeekStart.atStartOfDay(),
                 lastWeekEnd.atTime(LocalTime.MAX),
                 prevWeekStart.atStartOfDay(),
@@ -85,7 +111,7 @@ public class AiReportService {
         );
     }
 
-    private ReportData fetchReportData(Long userId, ReportDateRages dateRanges) {
+    private ReportData fetchReportData(Long userId, ReportDateRanges dateRanges) {
         List<ActivityRecord> analysisRecords = activityRecordRepository.findByUserIdAndBetweenTime(
                 userId, dateRanges.analysisStart(), dateRanges.analysisEnd());
 
@@ -120,9 +146,25 @@ public class AiReportService {
                 %s
                 
                 [리포트 작성 가이드]
-                1. [지난주]와 [지지난주] 데이터를 비교 분석해 줘. (예: "공부 시간이 2시간 증가했습니다.")
-                2. [지난주 시간대별 데이터]를 바탕으로 사용자의 핵심 '활동 패턴'을 1~2문장으로 분석해 줘. (예: "주로 밤 시간대에 '공부' 활동이 집중되어 있습니다.")
-                3. 위 내용을 종합해서 개선점이나 칭찬을 1~2문장으로 제안해 줘.
+                1. [총평]을 1~2문장으로 요약해 줘.
+                2. [지난주]와 [지지난주] 데이터를 비교 분석해 줘.
+                3. [지난주 시간대별 데이터]를 바탕으로 사용자의 핵심 '활동 패턴'을 분석해 줘.
+                4. 위 내용을 종합해서 개선점이나 칭찬을 제안해 줘.
+
+                [출력 형식]
+                - 다른 인사말이나 부연 설명은 일절 하지 마.
+                - 반드시 `REPORT_START`로 응답을 시작해 줘.
+                - 각 섹션 사이에 `---BREAK---` 구분자를 정확히 넣어줘.
+                - 절대 마크다운(**, ## 등)을 사용하지 말고, 순수 텍스트(plain text)로만 응답해 줘.
+
+                REPORT_START
+                (1. 총평 텍스트)
+                ---BREAK---
+                (2. 비교 분석 텍스트)
+                ---BREAK---
+                (3. 패턴 분석 텍스트)
+                ---BREAK---
+                (4. 제안 텍스트)
                 """,
                 summaries.analysisSummary(),
                 summaries.comparisonSummary(),
