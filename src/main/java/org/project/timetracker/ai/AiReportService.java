@@ -5,8 +5,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.TemporalAdjusters;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.project.timetracker.record.ActivityRecord;
 import org.project.timetracker.record.ActivityRecordRepository;
@@ -170,6 +172,61 @@ public class AiReportService {
             return "기록된 데이터가 없습니다.";
         }
 
-        return String.format("[총 %d건의 기록을 시간대별로 요약할 예정]", records.size());
+        Map<String, List<ActivityRecord>> timeSlotGroups = records.stream()
+                .collect(Collectors.groupingBy(record -> getTimeSlot(record.getStartTime().toLocalTime())));
+
+        StringBuilder summaryText = new StringBuilder();
+
+        timeSlotGroups.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(this::getTimeSlotOrder)))
+                .forEach(entry -> {
+                    String timeSlot = entry.getKey();
+                    List<ActivityRecord> timeSlotRecords = entry.getValue();
+
+                    Map<String, Long> categoryAmounts = timeSlotRecords.stream()
+                            .collect(Collectors.groupingBy(
+                                    ActivityRecord::getCategory,
+                                    Collectors.summingLong(ActivityRecord::getSpanMinutes)
+                            ));
+
+                    summaryText.append(String.format("\n[%s]\n", timeSlot));
+
+                    categoryAmounts.entrySet().stream()
+                            .sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
+                            .forEach(categoryEntry -> {
+                                String category = categoryEntry.getKey();
+                                long amount = categoryEntry.getValue();
+                                if (amount > 0) {
+                                    summaryText.append(String.format(
+                                            "- %s: %d시간 %d분\n",
+                                            category, amount / 60, amount % 60
+                                    ));
+                                }
+                            });
+                });
+
+        return summaryText.toString();
+    }
+
+    private String getTimeSlot(LocalTime time) {
+        int hour = time.getHour();
+
+        if (hour >= 0 && hour < 6) {
+            return "새벽 (00시~06시)";
+        } else if (hour >= 6 && hour < 12) {
+            return "오전 (06시~12시)";
+        } else if (hour >= 12 && hour < 18) {
+            return "오후 (12시~18시)";
+        } else {
+            return "밤 (18시~24시)";
+        }
+    }
+
+    private int getTimeSlotOrder(String timeSlot) {
+        if (timeSlot.startsWith("새벽")) return 1;
+        if (timeSlot.startsWith("오전")) return 2;
+        if (timeSlot.startsWith("오후")) return 3;
+        if (timeSlot.startsWith("밤")) return 4;
+        return 5;
     }
 }
