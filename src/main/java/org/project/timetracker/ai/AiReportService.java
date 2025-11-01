@@ -1,10 +1,8 @@
 package org.project.timetracker.ai;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.temporal.TemporalAdjusters;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -42,23 +40,25 @@ public class AiReportService {
             String timeSlotSummary
     ) {}
 
-    public AiReportResponse generateReport(Long userId, String period) {
-        if ("last_week".equals(period)) {
-            return generateLastWeekReport(userId);
+    public AiReportResponse generateReport(Long userId, int period) {
+        if (period <= 0) {
+            throw new IllegalArgumentException("기간은 0보다 커야 합니다.");
         }
 
-        throw new IllegalArgumentException("잘못된 기간: " + period);
+        return generateDynamicReport(userId, period);
     }
 
-    private AiReportResponse generateLastWeekReport(Long userId) {
+    private AiReportResponse generateDynamicReport(Long userId, int period) {
         //날짜 계산
-        ReportDateRanges dateRanges = calculateLastWeekRanges();
+        ReportDateRanges dateRanges = calculateDateRanges(period);
 
         //데이터 조회
         ReportData data = fetchReportData(userId, dateRanges);
 
         if (data.analysisRecords().isEmpty()) {
-            return AiReportResponse.fromMessage("지난주에 기록된 활동 데이터가 없습니다. AI 리포트를 생성할 수 없습니다.");
+            return AiReportResponse.fromMessage(
+                    String.format("최근 %d일간 기록된 활동 데이터가 없습니다. AI 리포트를 생성할 수 없습니다.", period)
+            );
         }
 
         //데이터 요약
@@ -90,24 +90,20 @@ public class AiReportService {
         );
     }
 
-    private ReportDateRanges calculateLastWeekRanges() {
+    private ReportDateRanges calculateDateRanges(int period) {
         LocalDate today = LocalDate.now();
 
-        LocalDate lastWeekStart = today.minusWeeks(1)
-                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-        LocalDate lastWeekEnd = today.minusWeeks(1)
-                .with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+        LocalDate analysisEnd = today.minusDays(1);
+        LocalDate analysisStart = analysisEnd.minusDays(period - 1);
 
-        LocalDate prevWeekStart = today.minusWeeks(2)
-                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-        LocalDate prevWeekEnd = today.minusWeeks(2)
-                .with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+        LocalDate comparisonEnd = analysisStart.minusDays(1);
+        LocalDate comparisonStart = comparisonEnd.minusDays(period - 1);
 
         return new ReportDateRanges(
-                lastWeekStart.atStartOfDay(),
-                lastWeekEnd.atTime(LocalTime.MAX),
-                prevWeekStart.atStartOfDay(),
-                prevWeekEnd.atTime(LocalTime.MAX)
+                analysisStart.atStartOfDay(),
+                analysisEnd.atTime(LocalTime.MAX),
+                comparisonStart.atStartOfDay(),
+                comparisonEnd.atTime(LocalTime.MAX)
         );
     }
 
@@ -134,21 +130,21 @@ public class AiReportService {
 
         return String.format("""
                 너는 전문 시간 관리 코치야.
-                아래 [데이터]를 보고 사용자를 위한 주간 리포트를 작성해 줘.
+                아래 [데이터]를 보고 사용자를 위한 리포트를 작성해 줘.
                 
-                [지난주 요약 데이터]
+                [최근 기간 요약 데이터]
                 %s
                 
-                [지지난주 요약 데이터]
+                [이전 기간 요약 데이터]
                 %s
                 
-                [지난주 시간대별 데이터]
+                [최근 기간 시간대별 데이터]
                 %s
                 
                 [리포트 작성 가이드]
                 1. [총평]을 1~2문장으로 요약해 줘.
-                2. [지난주]와 [지지난주] 데이터를 비교 분석해 줘.
-                3. [지난주 시간대별 데이터]를 바탕으로 사용자의 핵심 '활동 패턴'을 분석해 줘.
+                2. [최근 기간]과 [이전 기간] 데이터를 비교 분석해 줘.
+                3. [최근 기간 시간대별 데이터]를 바탕으로 사용자의 핵심 '활동 패턴'을 분석해 줘.
                 4. 위 내용을 종합해서 개선점이나 칭찬을 제안해 줘.
 
                 [출력 형식]

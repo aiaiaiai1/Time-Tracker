@@ -18,7 +18,7 @@ public class AiReportController {
     @PostMapping("/ai")
     public ResponseEntity<AiReportResponse> getAiReport(@RequestBody AiReportRequest request) {
         Long userId = tokenProcessor.parseToken(request.token());
-        String period = request.period();
+        int period = request.period();
 
         AiReportResponse response = aiReportService.generateReport(userId, period);
 
