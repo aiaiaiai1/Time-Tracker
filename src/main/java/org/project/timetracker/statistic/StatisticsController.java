@@ -6,7 +6,6 @@ import org.project.timetracker.auth.User;
 import org.project.timetracker.auth.UserRepository;
 import org.project.timetracker.record.ActivityRecord;
 import org.project.timetracker.record.ActivityRecordRepository;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,6 +28,7 @@ public class StatisticsController {
     private final TokenProcessor tokenProcessor;
     private final UserRepository userRepository;
     private final ActivityRecordRepository activityRecordRepository;
+    private final StatisticsCalculator statisticsCalculator;
 
     @GetMapping("/api/statistics")
     public ResponseEntity<StatisticsResponse> getStatistics(@RequestBody StatisticsRequest request) {
@@ -42,10 +42,7 @@ public class StatisticsController {
 
         List<ActivityRecord> activityRecords = activityRecordRepository.findByUserIdAndBetweenTime(user.getId(), startDate, endDate);
 
-        Map<String, List<ActivityRecord>> groupBy = activityRecords.stream().collect(Collectors.groupingBy(ActivityRecord::getCategory));
-
-
-        Map<String, StatistcsData> miniResults = getStatisticsByCategory(groupBy);
+        Map<String, StatistcsData> miniResults = statisticsCalculator.getStatisticsByCategory(activityRecords);
 
         long amountTotal = miniResults.values().stream()
                 .mapToLong(StatistcsData::getAmount)
@@ -78,19 +75,6 @@ public class StatisticsController {
             dataResponse.add(new StatisticsDataResponse(category, activityRecordValue.getFrequency(), formattedAmount, timePercent, accordPercent));
         }
         return dataResponse;
-    }
-
-    private Map<String, StatistcsData> getStatisticsByCategory(Map<String, List<ActivityRecord>> groupBy) {
-        Map<String, StatistcsData> results = new HashMap<>();
-        for (Map.Entry<String, List<ActivityRecord>> maps : groupBy.entrySet()) {
-            String category = maps.getKey();
-            List<ActivityRecord> records = maps.getValue();
-            int frequency = records.size();
-            long amount = records.stream().mapToLong(ActivityRecord::getSpanMinutes)
-                    .sum();
-            results.put(category, new StatistcsData(frequency, amount));
-        }
-        return results;
     }
 }
 

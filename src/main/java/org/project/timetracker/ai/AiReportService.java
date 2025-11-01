@@ -6,8 +6,12 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.project.timetracker.record.ActivityRecord;
+import org.project.timetracker.record.ActivityRecordRepository;
+import org.project.timetracker.statistic.StatistcsData;
+import org.project.timetracker.statistic.StatisticsCalculator;
 import org.springframework.ai.vertexai.gemini.VertexAiGeminiChatModel;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +21,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AiReportService {
     private final VertexAiGeminiChatModel chatModel;
+    private final ActivityRecordRepository activityRecordRepository;
+    private final StatisticsCalculator statisticsCalculator;
 
     private record ReportDateRages(
             LocalDateTime analysisStart, LocalDateTime analysisEnd,
@@ -77,6 +83,16 @@ public class AiReportService {
         );
     }
 
+    private ReportData fetchReportData(Long userId, ReportDateRages dateRanges) {
+        List<ActivityRecord> analysisRecords = activityRecordRepository.findByUserIdAndBetweenTime(
+                userId, dateRanges.analysisStart(), dateRanges.analysisEnd());
+
+        List<ActivityRecord> comparisonRecords = activityRecordRepository.findByUserIdAndBetweenTime(
+                userId, dateRanges.comparisonStart(), dateRanges.comparisonEnd());
+
+        return new ReportData(analysisRecords, comparisonRecords);
+    }
+
     private ReportSummaries summarizeReportData(ReportData data) {
         String analysisSummary = processRecords(data.analysisRecords());
         String comparisonSummary = processRecords(data.comparisonRecords());
@@ -117,8 +133,36 @@ public class AiReportService {
         if (records.isEmpty()) {
             return "기록된 데이터가 없습니다.";
         }
-        // (임시 텍스트)
-        return String.format("[총 %d건의 기록을 요약할 예정]", records.size());
+
+        Map<String, StatistcsData> miniResults = statisticsCalculator.getStatisticsByCategory(records);
+
+        long totalAmount = miniResults.values().stream()
+                .mapToLong(StatistcsData::getAmount)
+                .sum();
+
+        if (totalAmount == 0) {
+            return "기록된 시간이 없습니다.";
+        }
+
+        StringBuilder summaryText = new StringBuilder();
+
+        summaryText.append(String.format("총 기록 시간: %d시간 %d분\n", totalAmount / 60, totalAmount % 60));
+
+        for (Map.Entry<String, StatistcsData> entry : miniResults.entrySet()) {
+            String category = entry.getKey();
+            long amount = entry.getValue().getAmount();
+
+            long hours = amount / 60;
+            long minutes = amount % 60;
+            long percentage = Math.round((double) amount / totalAmount * 100);
+
+            summaryText.append(String.format(
+                    "- %s: %d시간 %d분 (약 %d%%)\n", // 가독성을 위해 형식 수정
+                    category, hours, minutes, percentage
+            ));
+        }
+
+        return summaryText.toString();
     }
 
     private String processTimeSlotRecords(List<ActivityRecord> records) {
