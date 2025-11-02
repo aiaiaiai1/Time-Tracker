@@ -8,6 +8,7 @@ import org.project.timetracker.record.ActivityRecord;
 import org.project.timetracker.record.ActivityRecordRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,7 +31,7 @@ public class StatisticsController {
     private final ActivityRecordRepository activityRecordRepository;
     private final StatisticsCalculator statisticsCalculator;
 
-    @GetMapping("/api/statistics")
+    @PostMapping("/api/statistics")
     public ResponseEntity<StatisticsResponse> getStatistics(@RequestBody StatisticsRequest request) {
         Long userId = tokenProcessor.parseToken(request.getToken());
         User user = userRepository.findById(userId)
