@@ -37,8 +37,13 @@ public class StatisticsController {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        LocalDateTime startDate = LocalDateTime.from(LocalDate.parse(request.getStartDate(), DateTimeFormatter.ofPattern("yyyyMMdd")));
-        LocalDateTime endDate = LocalDateTime.from(LocalDate.parse(request.getEndDate(), DateTimeFormatter.ofPattern("yyyyMMdd")));
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+        LocalDate start = LocalDate.parse(request.getStartDate(), formatter);
+        LocalDate end = LocalDate.parse(request.getEndDate(), formatter);
+
+        LocalDateTime startDate = start.atStartOfDay();
+        LocalDateTime endDate = end.atTime(23, 59, 59);
+
         long timeTotal = Duration.between(startDate, endDate).toMinutes();
 
         List<ActivityRecord> activityRecords = activityRecordRepository.findByUserIdAndBetweenTime(user.getId(), startDate, endDate);
