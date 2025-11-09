@@ -19,8 +19,9 @@ public class AiReportController {
     public ResponseEntity<AiReportResponse> getAiReport(@RequestBody AiReportRequest request) {
         Long userId = tokenProcessor.parseToken(request.token());
         int period = request.period();
+        String purpose = request.purpose();
 
-        AiReportResponse response = aiReportService.generateReport(userId, period);
+        AiReportResponse response = aiReportService.generateReport(userId, period, purpose);
 
         return ResponseEntity.ok(response);
     }

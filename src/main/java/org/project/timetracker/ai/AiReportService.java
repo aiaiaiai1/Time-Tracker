@@ -40,7 +40,7 @@ public class AiReportService {
             String timeSlotSummary
     ) {}
 
-    public AiReportResponse generateReport(Long userId, int period) {
+    public AiReportResponse generateReport(Long userId, int period, String purpose) {
         if (period <= 0) {
             throw new IllegalArgumentException("기간은 0보다 커야 합니다.");
         }
