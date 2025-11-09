@@ -3,15 +3,13 @@ package org.project.timetracker.ai;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.project.timetracker.record.ActivityRecord;
 import org.project.timetracker.record.ActivityRecordRepository;
-import org.project.timetracker.statistic.StatistcsData;
-import org.project.timetracker.statistic.StatisticsCalculator;
 import org.springframework.ai.vertexai.gemini.VertexAiGeminiChatModel;
 import org.springframework.stereotype.Service;
 
@@ -22,7 +20,6 @@ import org.springframework.stereotype.Service;
 public class AiReportService {
     private final VertexAiGeminiChatModel chatModel;
     private final ActivityRecordRepository activityRecordRepository;
-    private final StatisticsCalculator statisticsCalculator;
 
     private record ReportDateRanges(
             LocalDateTime analysisStart, LocalDateTime analysisEnd,
@@ -34,10 +31,9 @@ public class AiReportService {
             List<ActivityRecord> comparisonRecords
     ) {}
 
-    private record ReportSummaries(
-            String analysisSummary,
-            String comparisonSummary,
-            String timeSlotSummary
+    private record ReportDataText(
+            String analysisRecordsText,
+            String comparisonRecordsText
     ) {}
 
     public AiReportResponse generateReport(Long userId, int period, String purpose) {
@@ -45,10 +41,10 @@ public class AiReportService {
             throw new IllegalArgumentException("기간은 0보다 커야 합니다.");
         }
 
-        return generateDynamicReport(userId, period);
+        return generateDynamicReport(userId, period, purpose);
     }
 
-    private AiReportResponse generateDynamicReport(Long userId, int period) {
+    private AiReportResponse generateDynamicReport(Long userId, int period, String purpose) {
         //날짜 계산
         ReportDateRanges dateRanges = calculateDateRanges(period);
 
@@ -62,9 +58,9 @@ public class AiReportService {
         }
 
         //데이터 요약
-        ReportSummaries summaries = summarizeReportData(data);
+        ReportDataText dataText = processReportData(data);
         //프롬프트 생성
-        String prompt = createPrompt(summaries);
+        String prompt = createPrompt(dataText, purpose);
         //AI 호출
         String fullReport = chatModel.call(prompt);
 
@@ -78,7 +74,7 @@ public class AiReportService {
 
         String[] parts = cleanReport.split("---BREAK---");
 
-        if (parts.length < 4) {
+        if (parts.length < 5) {
             return AiReportResponse.fromMessage(fullReport);
         }
 
@@ -86,7 +82,8 @@ public class AiReportService {
                 parts[0].trim(), // 1. 총평
                 parts[1].trim(), // 2. 비교
                 parts[2].trim(), // 3. 패턴
-                parts[3].trim()  // 4. 제안
+                parts[3].trim(), // 4. 제안
+                parts[4].trim()
         );
     }
 
@@ -117,154 +114,83 @@ public class AiReportService {
         return new ReportData(analysisRecords, comparisonRecords);
     }
 
-    private ReportSummaries summarizeReportData(ReportData data) {
-        String analysisSummary = processRecords(data.analysisRecords());
-        String comparisonSummary = processRecords(data.comparisonRecords());
-        String timeSlotSummary = processTimeSlotRecords(data.analysisRecords());
+    private ReportDataText processReportData(ReportData data) {
+        String analysisText = formatRecordsToString(data.analysisRecords);
+        String comparisonText = formatRecordsToString(data.comparisonRecords);
 
-        return new ReportSummaries(analysisSummary, comparisonSummary, timeSlotSummary);
+        return new ReportDataText(analysisText, comparisonText);
+    }
+
+    private String formatRecordsToString(List<ActivityRecord> records) {
+        if (records.isEmpty()) {
+            return "기록된 데이터가 없습니다.";
+        }
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+        return records.stream()
+                .sorted(Comparator.comparing(ActivityRecord::getStartTime))
+                .map(record -> String.format(
+                        "일시: %s, 카테고리: %s, 시간(분): %d, 메모: %s",
+                        record.getStartTime().format(formatter),
+                        record.getCategory(),
+                        record.getSpanMinutes(),
+                        (record.getMemo() != null && !record.getMemo().isBlank() ? record.getMemo() : "내용 없음")
+                ))
+                .collect(Collectors.joining("\n"));
     }
 
 
-    private String createPrompt(ReportSummaries summaries) {
+    private String createPrompt(ReportDataText dataText, String purpose) {
+        String userPurpose = (purpose != null && !purpose.isBlank()) ? purpose : "특별한 목표 없음";
 
         return String.format("""
-                너는 전문 시간 관리 코치야.
-                아래 [데이터]를 보고 사용자를 위한 리포트를 작성해 줘.
+                너는 전문 시간 관리 코치이자 사용자의 특정 목표 달성을 돕는 전문 컨설턴트야.
+                아래 [사용자 목표], [데이터]를 보고 사용자를 위한 리포트를 작성해 줘.
+                [데이터]는 사용자의 모든 실제 기록을 시간순으로 정렬한 목록이야.
                 
-                [최근 기간 요약 데이터]
+                [사용자 목표]
                 %s
                 
-                [이전 기간 요약 데이터]
+                [최근 기간 활동 내역]
                 %s
                 
-                [최근 기간 시간대별 데이터]
+                [이전 기간 활동 내역]
                 %s
-                
+    
                 [리포트 작성 가이드]
-                1. [총평]을 1~2문장으로 요약해 줘.
-                2. [최근 기간]과 [이전 기간] 데이터를 비교 분석해 줘.
-                3. [최근 기간 시간대별 데이터]를 바탕으로 사용자의 핵심 '활동 패턴'을 분석해 줘.
-                4. 위 내용을 종합해서 개선점이나 칭찬을 제안해 줘.
+                1. 전체 리포트 내용을 한 문장으로 강력하게 요약해 줘. (예: "공부 시간은 늘었지만, 핵심 활동이 부족합니다.")
+                2. 총평을 2~3문장으로 작성해 줘.
+                3. 최근 기간과 이전 기간 활동 내역을 바탕으로 총 시간, 카테고리별 변화 등을 비교 분석해줘.
+                4. 최근 기간 활동 내역의 일시를 보고 시간대별(오전/오후/밤/새벽) 활동 패턴을 분석해 줘.
+                5. 실행 가능한 제안을 사용자 목표와 메모 내용을 바탕으로, 사용자가 당장 실행할 수 있는 구체적인 행동을 하나의 자연스러운 단락으로 이어서 제안해 줘.
+                  - 왜 그 행동이 필요한지를 반드시 포함해야 해.
+                  - (예: "취업 목표에 비해 코딩 테스트 연습이 전혀 없으시네요. 따라서 주 2회는 코딩 테스트 시간을 확보하시는 게 좋겠습니다. 또한 CS 이론 학습도 부족해 보이니...")
 
                 [출력 형식]
-                - 다른 인사말이나 부연 설명은 일절 하지 마.
-                - 반드시 `REPORT_START`로 응답을 시작해 줘.
-                - 각 섹션 사이에 `---BREAK---` 구분자를 정확히 넣어줘.
-                - 절대 마크다운(**, ## 등)을 사용하지 말고, 순수 텍스트(plain text)로만 응답해 줘.
-
+                (아래 규칙을 반드시 엄격하게 지킬 것. 이 응답은 컴퓨터가 자동으로 파싱할 예정임.)
+                
+                1. 절대 다른 인사말, 부연 설명, 마크다운(**, ## 등)을 사용하지 마.
+                2. 응답은 반드시 `REPORT_START`라는 단어로 시작해야 해.
+                3. 5개의 섹션은 반드시 `---BREAK---` 구분자로 분리해야 해.
+                4. 각 섹션에는 1., 2. 같은 번호나 [괄호] 같은 제목/레이블을 절대 넣지 마.
+                5. 오직 순수 텍스트(plain text)로만 응답해.
+                
+                [응답 예시 (이 구조를 정확히 따를 것)]
                 REPORT_START
-                (1. 총평 텍스트)
+                (여기에 1번 한 줄 요약 텍스트만 넣기)
                 ---BREAK---
-                (2. 비교 분석 텍스트)
+                (여기에 2번 총평 텍스트만 넣기)
                 ---BREAK---
-                (3. 패턴 분석 텍스트)
+                (여기에 3번 비교 분석 텍스트만 넣기)
                 ---BREAK---
-                (4. 제안 텍스트)
+                (여기에 4번 패턴 분석 텍스트만 넣기)
+                ---BREAK---
+                (여기에 5번 실행 가능한 제안 텍스트만 넣기)
                 """,
-                summaries.analysisSummary(),
-                summaries.comparisonSummary(),
-                summaries.timeSlotSummary()
+                userPurpose,
+                dataText.analysisRecordsText(),
+                dataText.comparisonRecordsText()
         );
-    }
-
-
-    private String processRecords(List<ActivityRecord> records) {
-        if (records.isEmpty()) {
-            return "기록된 데이터가 없습니다.";
-        }
-
-        Map<String, StatistcsData> miniResults = statisticsCalculator.getStatisticsByCategory(records);
-
-        long totalAmount = miniResults.values().stream()
-                .mapToLong(StatistcsData::getAmount)
-                .sum();
-
-        if (totalAmount == 0) {
-            return "기록된 시간이 없습니다.";
-        }
-
-        StringBuilder summaryText = new StringBuilder();
-
-        summaryText.append(String.format("총 기록 시간: %d시간 %d분\n", totalAmount / 60, totalAmount % 60));
-
-        for (Map.Entry<String, StatistcsData> entry : miniResults.entrySet()) {
-            String category = entry.getKey();
-            long amount = entry.getValue().getAmount();
-
-            long hours = amount / 60;
-            long minutes = amount % 60;
-            long percentage = Math.round((double) amount / totalAmount * 100);
-
-            summaryText.append(String.format(
-                    "- %s: %d시간 %d분 (약 %d%%)\n", // 가독성을 위해 형식 수정
-                    category, hours, minutes, percentage
-            ));
-        }
-
-        return summaryText.toString();
-    }
-
-    private String processTimeSlotRecords(List<ActivityRecord> records) {
-        if (records.isEmpty()) {
-            return "기록된 데이터가 없습니다.";
-        }
-
-        Map<String, List<ActivityRecord>> timeSlotGroups = records.stream()
-                .collect(Collectors.groupingBy(record -> getTimeSlot(record.getStartTime().toLocalTime())));
-
-        StringBuilder summaryText = new StringBuilder();
-
-        timeSlotGroups.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey(Comparator.comparing(this::getTimeSlotOrder)))
-                .forEach(entry -> {
-                    String timeSlot = entry.getKey();
-                    List<ActivityRecord> timeSlotRecords = entry.getValue();
-
-                    Map<String, Long> categoryAmounts = timeSlotRecords.stream()
-                            .collect(Collectors.groupingBy(
-                                    ActivityRecord::getCategory,
-                                    Collectors.summingLong(ActivityRecord::getSpanMinutes)
-                            ));
-
-                    summaryText.append(String.format("\n[%s]\n", timeSlot));
-
-                    categoryAmounts.entrySet().stream()
-                            .sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
-                            .forEach(categoryEntry -> {
-                                String category = categoryEntry.getKey();
-                                long amount = categoryEntry.getValue();
-                                if (amount > 0) {
-                                    summaryText.append(String.format(
-                                            "- %s: %d시간 %d분\n",
-                                            category, amount / 60, amount % 60
-                                    ));
-                                }
-                            });
-                });
-
-        return summaryText.toString();
-    }
-
-    private String getTimeSlot(LocalTime time) {
-        int hour = time.getHour();
-
-        if (hour >= 0 && hour < 6) {
-            return "새벽 (00시~06시)";
-        } else if (hour >= 6 && hour < 12) {
-            return "오전 (06시~12시)";
-        } else if (hour >= 12 && hour < 18) {
-            return "오후 (12시~18시)";
-        } else {
-            return "밤 (18시~24시)";
-        }
-    }
-
-    private int getTimeSlotOrder(String timeSlot) {
-        if (timeSlot.startsWith("새벽")) return 1;
-        if (timeSlot.startsWith("오전")) return 2;
-        if (timeSlot.startsWith("오후")) return 3;
-        if (timeSlot.startsWith("밤")) return 4;
-        return 5;
     }
 }
