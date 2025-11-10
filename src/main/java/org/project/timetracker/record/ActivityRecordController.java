@@ -25,4 +25,9 @@ public class ActivityRecordController {
         ActivityRecordResponse response = activityRecordService.deleteSchedule(request);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/ai-recommended")
+    public ResponseEntity<?> createWithAi(@RequestBody ActivityRecordCreateRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body("예시");
+    }
 }
