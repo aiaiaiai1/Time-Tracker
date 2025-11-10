@@ -1,7 +1,7 @@
 package org.project.timetracker.ai;
 
 public record AiReportResponse(
-        String oneLine,
+        String oneLineSummary,
         String totalSummary,
         String comparisonReport,
         String patternReport,

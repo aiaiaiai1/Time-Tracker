@@ -79,11 +79,11 @@ public class AiReportService {
         }
 
         return new AiReportResponse(
-                parts[0].trim(), // 1. 총평
-                parts[1].trim(), // 2. 비교
-                parts[2].trim(), // 3. 패턴
-                parts[3].trim(), // 4. 제안
-                parts[4].trim()
+                parts[0].trim(), // 1. 한줄요약
+                parts[1].trim(), // 2. 총평
+                parts[2].trim(), // 3. 비교
+                parts[3].trim(), // 4. 패턴
+                parts[4].trim() //5. 제안
         );
     }
 
