@@ -14,6 +14,14 @@ public class AiCategoryService {
             "생활", "일", "자기계발", "사교", "여가", "정신",  "기타"
     );
 
+    public String recommendCategory(String memo) {
+        String prompt = createPrompt(memo);
+
+        String recommendedCategory = chatModel.call(prompt).trim();
+
+        return ensureValidCategory(recommendedCategory);
+    }
+
     private String createPrompt(String memo) {
         String categoriesText = String.join(", ", CATEGORY_OPTIONS);
 
@@ -35,5 +43,13 @@ public class AiCategoryService {
                 """,
                 memo,
                 categoriesText);
+    }
+
+    private String ensureValidCategory(String recommendedCategory) {
+        if (CATEGORY_OPTIONS.contains(recommendedCategory)) {
+            return recommendedCategory;
+        }
+
+        return "기타";
     }
 }
