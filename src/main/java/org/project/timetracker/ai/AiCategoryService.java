@@ -15,6 +15,10 @@ public class AiCategoryService {
     );
 
     public String recommendCategory(String memo) {
+        if (memo == null || memo.isBlank()) {
+            return "기타";
+        }
+
         String prompt = createPrompt(memo);
 
         String recommendedCategory = chatModel.call(prompt).trim();
