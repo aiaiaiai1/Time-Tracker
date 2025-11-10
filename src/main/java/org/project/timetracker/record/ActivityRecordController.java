@@ -1,6 +1,7 @@
 package org.project.timetracker.record;
 
 import lombok.RequiredArgsConstructor;
+import org.project.timetracker.ai.AiCategoryService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ActivityRecordController {
     private final ActivityRecordService activityRecordService;
+    private final AiCategoryService aiCategoryService;
 
     @PostMapping
     public ResponseEntity<ActivityRecordResponse> create(@RequestBody ActivityRecordCreateRequest request) {
@@ -24,5 +26,14 @@ public class ActivityRecordController {
     public ResponseEntity<ActivityRecordResponse> delete(@RequestBody ActivityRecordDeleteRequest request) {
         ActivityRecordResponse response = activityRecordService.deleteSchedule(request);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/ai-recommended")
+    public ResponseEntity<ActivityRecordResponse> createWithAi(@RequestBody AiCreateRequest request) {
+        String recommendedCategory = aiCategoryService.recommendCategory(request.memo());
+
+        ActivityRecordCreateRequest recordCreateRequest = ActivityRecordCreateRequest.fromAiRequest(request, recommendedCategory);
+
+        return ResponseEntity.ok(activityRecordService.create(recordCreateRequest));
     }
 }

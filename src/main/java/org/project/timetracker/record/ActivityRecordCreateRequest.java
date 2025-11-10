@@ -8,4 +8,17 @@ public record ActivityRecordCreateRequest(
         String category,
         String memo
 ) {
+    public static ActivityRecordCreateRequest fromAiRequest(
+            AiCreateRequest aiRequest,
+            String category
+    ) {
+        return new ActivityRecordCreateRequest(
+                aiRequest.token(),
+                aiRequest.date(),
+                aiRequest.startTime(),
+                aiRequest.endTime(),
+                category,
+                aiRequest.memo()
+        );
+    }
 }
