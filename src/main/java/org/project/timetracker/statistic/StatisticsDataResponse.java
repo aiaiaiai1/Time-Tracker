@@ -2,6 +2,8 @@ package org.project.timetracker.statistic;
 
 import lombok.Getter;
 
+import java.util.List;
+
 @Getter
 public class StatisticsDataResponse {
 
@@ -10,6 +12,7 @@ public class StatisticsDataResponse {
     private String amount;
     private double timePercent;
     private double accordPercent;
+    private List<StatisticsResponse> details;
 
     public StatisticsDataResponse(String category, int frequency, String amount, double timePercent, double accordPercent) {
         this.category = category;
