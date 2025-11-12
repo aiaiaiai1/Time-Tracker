@@ -11,5 +11,11 @@ public class StatisticsDetailResponse {
 
     private String name;
     private String amount;
-    private String frequency;
+    private int frequency;
+
+    public StatisticsDetailResponse(String name, String amount, int frequency) {
+        this.name = name;
+        this.amount = amount;
+        this.frequency = frequency;
+    }
 }

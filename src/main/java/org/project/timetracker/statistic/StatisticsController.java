@@ -7,7 +7,6 @@ import org.project.timetracker.auth.UserRepository;
 import org.project.timetracker.record.ActivityRecord;
 import org.project.timetracker.record.ActivityRecordRepository;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,10 +16,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
@@ -50,17 +47,23 @@ public class StatisticsController {
 
         Map<String, StatistcsData> miniResults = statisticsCalculator.getStatisticsByCategory(activityRecords);
 
+        Map<String, Map<String, StatisticsDetailData>> detailResults = statisticsCalculator.getStatisticsDetailsByName(activityRecords);
+
         long amountTotal = miniResults.values().stream()
                 .mapToLong(StatistcsData::getAmount)
                 .sum();
 
-        List<StatisticsDataResponse> dataResponse = getTotalStatistics(miniResults, amountTotal, timeTotal);
+        List<StatisticsDataResponse> dataResponse = getTotalStatistics(miniResults, detailResults, amountTotal, timeTotal);
 
-        return  ResponseEntity.ok(new StatisticsResponse(dataResponse));
+        return ResponseEntity.ok(new StatisticsResponse(dataResponse));
 
     }
 
-    private List<StatisticsDataResponse> getTotalStatistics(Map<String, StatistcsData> miniResults, long amountTotal, long timeTotal) {
+    private List<StatisticsDataResponse> getTotalStatistics(
+            Map<String, StatistcsData> miniResults,
+            Map<String, Map<String, StatisticsDetailData>> detailResults,
+            long amountTotal, long timeTotal
+    ) {
         List<StatisticsDataResponse> dataResponse = new ArrayList<>();
 
         for (Map.Entry<String, StatistcsData> miniResult : miniResults.entrySet()) {
@@ -69,18 +72,36 @@ public class StatisticsController {
 
             long amount = activityRecordValue.getAmount();
 
-            long hours = amount / 60;
-            long minutes = amount % 60;
-
-            String formattedAmount = String.format("%02d:%02d", hours, minutes);
+            String formattedAmount = getFormattedAmount(amount);
 
             long timePercent = Math.round((float) amount / amountTotal * 100);
             long accordPercent = Math.round((float) amount / timeTotal * 100);
 
+            Map<String, StatisticsDetailData> detailMaps = detailResults.get(category);
 
-            dataResponse.add(new StatisticsDataResponse(category, activityRecordValue.getFrequency(), formattedAmount, timePercent, accordPercent));
+            List<StatisticsDetailResponse> detailResponses = new ArrayList<>();
+
+            for (Map.Entry<String, StatisticsDetailData> details : detailMaps.entrySet()) {
+                String name = details.getKey();
+                StatisticsDetailData value = details.getValue();
+                String formattedDetailAmount = getFormattedAmount(value.getAmount());
+
+                detailResponses.add(new StatisticsDetailResponse(name, formattedDetailAmount, value.getFrequency()));
+            }
+
+            dataResponse.add(new StatisticsDataResponse(
+                    category, activityRecordValue.getFrequency(),
+                    formattedAmount, timePercent, accordPercent, detailResponses)
+            );
         }
         return dataResponse;
+    }
+
+    private String getFormattedAmount(long amount) {
+        long hours = amount / 60;
+        long minutes = amount % 60;
+
+        return String.format("%02d:%02d", hours, minutes);
     }
 }
 
