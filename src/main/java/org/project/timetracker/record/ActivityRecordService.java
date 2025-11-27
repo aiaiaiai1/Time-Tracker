@@ -4,12 +4,14 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.project.timetracker.auth.TokenProcessor;
 import org.project.timetracker.auth.User;
 import org.project.timetracker.auth.UserRepository;
 import org.project.timetracker.record.data.ActivityRecordAllData;
+import org.springframework.cglib.core.Local;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -34,13 +36,15 @@ public class ActivityRecordService {
         List<ActivityRecord> overlappingRecords = activityRecordRepository
                 .findOverlappingRecords(userId, startTime, endTime);
 
+        ActivityRecord newRecord = ActivityRecord.create(
+                user, startTime, endTime, request.category(), request.memo(), source
+        );
+
         if (overlappingRecords.isEmpty()) {
-            ActivityRecord newRecord = ActivityRecord.create(
-                    user, startTime, endTime, request.category(), request.memo(), source
-            );
             activityRecordRepository.save(newRecord);
         } else {
             //우선순위 기반 처리 메서드
+            processWithPriority(user, newRecord, overlappingRecords);
         }
 
         return buildAllDataResponse(userId, "전체 데이터 조회 성공");
@@ -74,5 +78,34 @@ public class ActivityRecordService {
     private LocalDateTime parseDateTime(String date, String time) {
         return LocalDateTime.of(LocalDate.parse(date, DateTimeFormatter.ofPattern("yyyyMMdd")),
                 LocalTime.parse(time, DateTimeFormatter.ofPattern("HH:mm")));
+    }
+
+    private void processWithPriority(User user, ActivityRecord newRecord, List<ActivityRecord> overlappingRecords) {
+        int newPriority = newRecord.getSource().getPriority();
+
+
+        List<ActivityRecord> toDelete = new ArrayList<>();//삭제
+        List<ActivityRecord> toCreate = new ArrayList<>();//추가
+
+
+        LocalDateTime newStartTime = newRecord.getStartTime();
+        LocalDateTime newEndTime = newRecord.getEndTime();
+
+        for (ActivityRecord existingRecord : overlappingRecords) {
+            if (newPriority <= existingRecord.getSource().getPriority()) {
+                //높은 우선순위 충돌 메서드
+            } else {
+                //낮은 우선순위 충돌 메서드
+            }
+        }
+
+        //조정된 기록... 그런데 조정했는데 Start > End 면 저장 못함
+        if (newStartTime.isBefore(newEndTime)) {
+            toCreate.add(newRecord);
+        }
+
+        activityRecordRepository.deleteAll(toDelete);
+        //시간 변경 -> JPA dirty checking update
+        activityRecordRepository.saveAll(toCreate);
     }
 }
