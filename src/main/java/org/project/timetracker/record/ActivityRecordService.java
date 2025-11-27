@@ -93,7 +93,7 @@ public class ActivityRecordService {
 
         for (ActivityRecord existingRecord : overlappingRecords) {
             if (newPriority <= existingRecord.getSource().getPriority()) {
-                //높은 우선순위 충돌 메서드
+                handleHigherPriorityConflict(newRecord, existingRecord, toDelete, toCreate);
             } else {
                 //낮은 우선순위 충돌 메서드
             }
@@ -107,5 +107,40 @@ public class ActivityRecordService {
         activityRecordRepository.deleteAll(toDelete);
         //시간 변경 -> JPA dirty checking update
         activityRecordRepository.saveAll(toCreate);
+    }
+
+    private void handleHigherPriorityConflict(
+            ActivityRecord newRecord,
+            ActivityRecord existingRecord,
+            List<ActivityRecord> toDelete,
+            List<ActivityRecord> toCreate) {
+        LocalDateTime newStartTime = newRecord.getStartTime();
+        LocalDateTime newEndTime = newRecord.getEndTime();
+        LocalDateTime existingStartTime = existingRecord.getStartTime();
+        LocalDateTime existingEndTime = existingRecord.getEndTime();
+
+        boolean newCoversExisting = !newStartTime.isAfter(existingStartTime)
+                && !newEndTime.isBefore(existingEndTime);
+        boolean newInsideExisting = newStartTime.isAfter(existingStartTime)
+                && newEndTime.isBefore(existingEndTime);
+        boolean newCutsExistingStart = !newStartTime.isAfter(existingStartTime) &&
+                newEndTime.isAfter(existingStartTime) &&
+                newEndTime.isBefore(existingEndTime);
+        boolean newCutsExistingEnd = newStartTime.isAfter(existingStartTime) &&
+                newStartTime.isBefore(existingEndTime) &&
+                !newEndTime.isBefore(existingEndTime);
+
+        if (newCoversExisting) {
+            toDelete.add(existingRecord);
+        } else if (newInsideExisting) {
+            existingRecord.updateTimeRange(existingStartTime, newStartTime);
+
+            ActivityRecord secondPart = existingRecord.copyWithNewTimeRange(newEndTime, existingEndTime);
+            toCreate.add(secondPart);
+        } else if (newCutsExistingStart) {
+            existingRecord.updateTimeRange(newEndTime, existingEndTime);
+        } else if (newCutsExistingEnd) {
+            existingRecord.updateTimeRange(existingStartTime, newStartTime);
+        }
     }
 }

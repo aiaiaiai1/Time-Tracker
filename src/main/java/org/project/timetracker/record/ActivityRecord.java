@@ -80,4 +80,20 @@ public class ActivityRecord {
         return span.toMinutes();
     }
 
+    public void updateTimeRange(LocalDateTime start, LocalDateTime end) {
+        this.startTime = start;
+        this.endTime = end;
+    }
+
+    public ActivityRecord copyWithNewTimeRange(LocalDateTime start, LocalDateTime end) {
+        return ActivityRecord.builder()
+                .user(this.user)
+                .startTime(start)
+                .endTime(end)
+                .category(this.category)
+                .memo(this.memo)
+                .source(this.source)
+                .build();
+    }
+
 }
