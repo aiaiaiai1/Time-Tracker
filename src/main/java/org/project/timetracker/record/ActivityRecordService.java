@@ -11,8 +11,8 @@ import org.project.timetracker.auth.TokenProcessor;
 import org.project.timetracker.auth.User;
 import org.project.timetracker.auth.UserRepository;
 import org.project.timetracker.record.data.ActivityRecordAllData;
-import org.springframework.cglib.core.Local;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +23,7 @@ public class ActivityRecordService {
     private final TokenProcessor tokenProcessor;
     private final ActivityRecordDtoMapper activityRecordDtoMapper;
 
+    @Transactional
     public ActivityRecordResponse create(ActivityRecordCreateRequest request) {
         Long userId = tokenProcessor.parseToken(request.token());
         User user = findUserById(userId);
@@ -31,7 +32,7 @@ public class ActivityRecordService {
         LocalDateTime endTime = parseDateTime(request.date(), request.endTime());
 
 
-        RecordSource source = request.source() != null ? RecordSource.valueOf(request.source()) : null;
+        RecordSource source = request.source() != null ? RecordSource.valueOf(request.source()) : RecordSource.USER;
 
         List<ActivityRecord> overlappingRecords = activityRecordRepository
                 .findOverlappingRecords(userId, startTime, endTime);
@@ -44,7 +45,7 @@ public class ActivityRecordService {
             activityRecordRepository.save(newRecord);
         } else {
             //우선순위 기반 처리 메서드
-            processWithPriority(user, newRecord, overlappingRecords);
+            processWithPriority(newRecord, overlappingRecords);
         }
 
         return buildAllDataResponse(userId, "전체 데이터 조회 성공");
@@ -80,24 +81,22 @@ public class ActivityRecordService {
                 LocalTime.parse(time, DateTimeFormatter.ofPattern("HH:mm")));
     }
 
-    private void processWithPriority(User user, ActivityRecord newRecord, List<ActivityRecord> overlappingRecords) {
+    private void processWithPriority(ActivityRecord newRecord, List<ActivityRecord> overlappingRecords) {
         int newPriority = newRecord.getSource().getPriority();
-
 
         List<ActivityRecord> toDelete = new ArrayList<>();//삭제
         List<ActivityRecord> toCreate = new ArrayList<>();//추가
-
-
-        LocalDateTime newStartTime = newRecord.getStartTime();
-        LocalDateTime newEndTime = newRecord.getEndTime();
 
         for (ActivityRecord existingRecord : overlappingRecords) {
             if (newPriority <= existingRecord.getSource().getPriority()) {
                 handleHigherPriorityConflict(newRecord, existingRecord, toDelete, toCreate);
             } else {
-                //낮은 우선순위 충돌 메서드
+                handleLowerPriorityConflict(newRecord, existingRecord, toCreate);
             }
         }
+
+        LocalDateTime newStartTime = newRecord.getStartTime();
+        LocalDateTime newEndTime = newRecord.getEndTime();
 
         //조정된 기록... 그런데 조정했는데 Start > End 면 저장 못함
         if (newStartTime.isBefore(newEndTime)) {
@@ -142,5 +141,41 @@ public class ActivityRecordService {
         } else if (newCutsExistingEnd) {
             existingRecord.updateTimeRange(existingStartTime, newStartTime);
         }
+    }
+
+    private void handleLowerPriorityConflict(
+            ActivityRecord newRecord,
+            ActivityRecord existingRecord,
+            List<ActivityRecord> toCreate
+    ) {
+        LocalDateTime newStartTime = newRecord.getStartTime();
+        LocalDateTime newEndTime = newRecord.getEndTime();
+        LocalDateTime existingStartTime = existingRecord.getStartTime();
+        LocalDateTime existingEndTime = existingRecord.getEndTime();
+
+        boolean existingCoversNew = !existingStartTime.isAfter(newStartTime)
+                && !existingEndTime.isBefore(newEndTime);
+        boolean existingInsideNew =
+                existingStartTime.isAfter(newStartTime) && existingEndTime.isBefore(newEndTime);
+        boolean existingCutsNewStart = !existingStartTime.isAfter(newStartTime) &&
+                existingEndTime.isAfter(newStartTime) &&
+                existingEndTime.isBefore(newEndTime);
+        boolean existingCutsNewEnd =
+                existingStartTime.isAfter(newStartTime) &&
+                        existingStartTime.isBefore(newEndTime) &&
+                        !existingEndTime.isBefore(newEndTime);
+
+        if (existingCoversNew) {
+            newRecord.updateTimeRange(newStartTime, newStartTime);
+        } else if (existingInsideNew) {
+            toCreate.add(newRecord.copyWithNewTimeRange(newStartTime, existingStartTime));
+
+            newRecord.updateTimeRange(existingEndTime, newEndTime);
+        } else if (existingCutsNewStart) {
+            newRecord.updateTimeRange(existingEndTime, newEndTime);
+        } else if (existingCutsNewEnd) {
+            newRecord.updateTimeRange(newStartTime, existingStartTime);
+        }
+
     }
 }
