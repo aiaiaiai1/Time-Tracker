@@ -28,21 +28,20 @@ public class ActivityRecordService {
         LocalDateTime startTime = parseDateTime(request.date(), request.startTime());
         LocalDateTime endTime = parseDateTime(request.date(), request.endTime());
 
-        if (activityRecordRepository.existsOverlappingRecords(userId, startTime, endTime)) {
-            throw new IllegalArgumentException("이미 해당 시간대에 일정이 존재합니다.");
-        }
 
         RecordSource source = request.source() != null ? RecordSource.valueOf(request.source()) : null;
 
-        ActivityRecord newRecord = ActivityRecord.create(
-                user,
-                startTime,
-                endTime,
-                request.category(),
-                request.memo(),
-                source);
+        List<ActivityRecord> overlappingRecords = activityRecordRepository
+                .findOverlappingRecords(userId, startTime, endTime);
 
-        activityRecordRepository.save(newRecord);
+        if (overlappingRecords.isEmpty()) {
+            ActivityRecord newRecord = ActivityRecord.create(
+                    user, startTime, endTime, request.category(), request.memo(), source
+            );
+            activityRecordRepository.save(newRecord);
+        } else {
+            //우선순위 기반 처리 메서드
+        }
 
         return buildAllDataResponse(userId, "전체 데이터 조회 성공");
     }
