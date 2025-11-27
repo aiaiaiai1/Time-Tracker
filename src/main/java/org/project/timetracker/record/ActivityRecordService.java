@@ -32,12 +32,15 @@ public class ActivityRecordService {
             throw new IllegalArgumentException("이미 해당 시간대에 일정이 존재합니다.");
         }
 
+        RecordSource source = request.source() != null ? RecordSource.valueOf(request.source()) : null;
+
         ActivityRecord newRecord = ActivityRecord.create(
                 user,
                 startTime,
                 endTime,
                 request.category(),
-                request.memo());
+                request.memo(),
+                source);
 
         activityRecordRepository.save(newRecord);
 

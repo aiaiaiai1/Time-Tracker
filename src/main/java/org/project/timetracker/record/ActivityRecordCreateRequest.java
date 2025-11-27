@@ -6,7 +6,8 @@ public record ActivityRecordCreateRequest(
         String startTime,
         String endTime,
         String category,
-        String memo
+        String memo,
+        String source
 ) {
     public static ActivityRecordCreateRequest fromAiRequest(
             AiCreateRequest aiRequest,
@@ -18,7 +19,8 @@ public record ActivityRecordCreateRequest(
                 aiRequest.startTime(),
                 aiRequest.endTime(),
                 category,
-                aiRequest.memo()
+                aiRequest.memo(),
+                "USER" //카테고리 추천 ai 방식은 유저가 하는 것
         );
     }
 }
