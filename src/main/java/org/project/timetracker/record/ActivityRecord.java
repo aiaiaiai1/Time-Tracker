@@ -33,16 +33,33 @@ public class ActivityRecord {
 
     private String memo;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private RecordSource source = RecordSource.USER; //default 설정
+
+
     @Builder
-    public ActivityRecord(User user, LocalDateTime startTime, LocalDateTime endTime, String category, String memo) {
+    public ActivityRecord(User user,
+            LocalDateTime startTime,
+            LocalDateTime endTime,
+            String category,
+            String memo,
+            RecordSource source) {
         this.user = user;
         this.startTime = startTime;
         this.endTime = endTime;
         this.category = category;
         this.memo = memo;
+        this.source = source != null ? source : RecordSource.USER;
     }
 
-    public static ActivityRecord create(User user, LocalDateTime startTime, LocalDateTime endTime, String category, String memo) {
+    public static ActivityRecord create(
+            User user,
+            LocalDateTime startTime,
+            LocalDateTime endTime,
+            String category,
+            String memo,
+            RecordSource source) {
         String memoToSave = memo;
         if (memoToSave == null) {
             memoToSave = "";
@@ -54,12 +71,29 @@ public class ActivityRecord {
                 .endTime(endTime)
                 .category(category)
                 .memo(memoToSave)
+                .source(source)
                 .build();
     }
 
     public long getSpanMinutes() {
         Duration span = Duration.between(startTime, endTime);
         return span.toMinutes();
+    }
+
+    public void updateTimeRange(LocalDateTime start, LocalDateTime end) {
+        this.startTime = start;
+        this.endTime = end;
+    }
+
+    public ActivityRecord copyWithNewTimeRange(LocalDateTime start, LocalDateTime end) {
+        return ActivityRecord.builder()
+                .user(this.user)
+                .startTime(start)
+                .endTime(end)
+                .category(this.category)
+                .memo(this.memo)
+                .source(this.source)
+                .build();
     }
 
 }

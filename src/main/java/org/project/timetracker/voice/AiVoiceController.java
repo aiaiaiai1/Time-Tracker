@@ -46,7 +46,8 @@ public class AiVoiceController {
                 info[1],
                 info[2],
                 category,
-                info[3]
+                info[3],
+                "USER"
         );
 
         ActivityRecordResponse response = activityRecordService.create(newRequest);

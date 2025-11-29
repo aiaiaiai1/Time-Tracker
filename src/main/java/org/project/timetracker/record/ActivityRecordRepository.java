@@ -17,4 +17,12 @@ public interface ActivityRecordRepository extends JpaRepository<ActivityRecord, 
     List<ActivityRecord> findByUserIdAndBetweenTime(Long userId, LocalDateTime start, LocalDateTime end);
 
     List<ActivityRecord> findByUserIdOrderByStartTimeAsc(Long userId);
+
+    @Query("SELECT r FROM ActivityRecord r WHERE r.user.id = :userId " +
+            "AND r.startTime < :endTime AND r.endTime > :startTime " +
+            "ORDER BY r.startTime")
+    List<ActivityRecord> findOverlappingRecords(
+            @Param("userId") Long userId,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime);
 }

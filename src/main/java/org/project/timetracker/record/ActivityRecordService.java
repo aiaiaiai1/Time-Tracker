@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.project.timetracker.auth.TokenProcessor;
@@ -11,6 +12,7 @@ import org.project.timetracker.auth.User;
 import org.project.timetracker.auth.UserRepository;
 import org.project.timetracker.record.data.ActivityRecordAllData;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +23,7 @@ public class ActivityRecordService {
     private final TokenProcessor tokenProcessor;
     private final ActivityRecordDtoMapper activityRecordDtoMapper;
 
+    @Transactional
     public ActivityRecordResponse create(ActivityRecordCreateRequest request) {
         Long userId = tokenProcessor.parseToken(request.token());
         User user = findUserById(userId);
@@ -28,18 +31,22 @@ public class ActivityRecordService {
         LocalDateTime startTime = parseDateTime(request.date(), request.startTime());
         LocalDateTime endTime = parseDateTime(request.date(), request.endTime());
 
-        if (activityRecordRepository.existsOverlappingRecords(userId, startTime, endTime)) {
-            throw new IllegalArgumentException("이미 해당 시간대에 일정이 존재합니다.");
-        }
+
+        RecordSource source = request.source() != null ? RecordSource.valueOf(request.source()) : RecordSource.USER;
+
+        List<ActivityRecord> overlappingRecords = activityRecordRepository
+                .findOverlappingRecords(userId, startTime, endTime);
 
         ActivityRecord newRecord = ActivityRecord.create(
-                user,
-                startTime,
-                endTime,
-                request.category(),
-                request.memo());
+                user, startTime, endTime, request.category(), request.memo(), source
+        );
 
-        activityRecordRepository.save(newRecord);
+        if (overlappingRecords.isEmpty()) {
+            activityRecordRepository.save(newRecord);
+        } else {
+            //우선순위 기반 처리 메서드
+            processWithPriority(newRecord, overlappingRecords);
+        }
 
         return buildAllDataResponse(userId, "전체 데이터 조회 성공");
     }
@@ -72,5 +79,103 @@ public class ActivityRecordService {
     private LocalDateTime parseDateTime(String date, String time) {
         return LocalDateTime.of(LocalDate.parse(date, DateTimeFormatter.ofPattern("yyyyMMdd")),
                 LocalTime.parse(time, DateTimeFormatter.ofPattern("HH:mm")));
+    }
+
+    private void processWithPriority(ActivityRecord newRecord, List<ActivityRecord> overlappingRecords) {
+        int newPriority = newRecord.getSource().getPriority();
+
+        List<ActivityRecord> toDelete = new ArrayList<>();//삭제
+        List<ActivityRecord> toCreate = new ArrayList<>();//추가
+
+        for (ActivityRecord existingRecord : overlappingRecords) {
+            if (newPriority <= existingRecord.getSource().getPriority()) {
+                handleHigherPriorityConflict(newRecord, existingRecord, toDelete, toCreate);
+            } else {
+                handleLowerPriorityConflict(newRecord, existingRecord, toCreate);
+            }
+        }
+
+        LocalDateTime newStartTime = newRecord.getStartTime();
+        LocalDateTime newEndTime = newRecord.getEndTime();
+
+        //조정된 기록... 그런데 조정했는데 Start > End 면 저장 못함
+        if (newStartTime.isBefore(newEndTime)) {
+            toCreate.add(newRecord);
+        }
+
+        activityRecordRepository.deleteAll(toDelete);
+        //시간 변경 -> JPA dirty checking update
+        activityRecordRepository.saveAll(toCreate);
+    }
+
+    private void handleHigherPriorityConflict(
+            ActivityRecord newRecord,
+            ActivityRecord existingRecord,
+            List<ActivityRecord> toDelete,
+            List<ActivityRecord> toCreate) {
+        LocalDateTime newStartTime = newRecord.getStartTime();
+        LocalDateTime newEndTime = newRecord.getEndTime();
+        LocalDateTime existingStartTime = existingRecord.getStartTime();
+        LocalDateTime existingEndTime = existingRecord.getEndTime();
+
+        boolean newCoversExisting = !newStartTime.isAfter(existingStartTime)
+                && !newEndTime.isBefore(existingEndTime);
+        boolean newInsideExisting = newStartTime.isAfter(existingStartTime)
+                && newEndTime.isBefore(existingEndTime);
+        boolean newCutsExistingStart = !newStartTime.isAfter(existingStartTime) &&
+                newEndTime.isAfter(existingStartTime) &&
+                newEndTime.isBefore(existingEndTime);
+        boolean newCutsExistingEnd = newStartTime.isAfter(existingStartTime) &&
+                newStartTime.isBefore(existingEndTime) &&
+                !newEndTime.isBefore(existingEndTime);
+
+        if (newCoversExisting) {
+            toDelete.add(existingRecord);
+        } else if (newInsideExisting) {
+            existingRecord.updateTimeRange(existingStartTime, newStartTime);
+
+            ActivityRecord secondPart = existingRecord.copyWithNewTimeRange(newEndTime, existingEndTime);
+            toCreate.add(secondPart);
+        } else if (newCutsExistingStart) {
+            existingRecord.updateTimeRange(newEndTime, existingEndTime);
+        } else if (newCutsExistingEnd) {
+            existingRecord.updateTimeRange(existingStartTime, newStartTime);
+        }
+    }
+
+    private void handleLowerPriorityConflict(
+            ActivityRecord newRecord,
+            ActivityRecord existingRecord,
+            List<ActivityRecord> toCreate
+    ) {
+        LocalDateTime newStartTime = newRecord.getStartTime();
+        LocalDateTime newEndTime = newRecord.getEndTime();
+        LocalDateTime existingStartTime = existingRecord.getStartTime();
+        LocalDateTime existingEndTime = existingRecord.getEndTime();
+
+        boolean existingCoversNew = !existingStartTime.isAfter(newStartTime)
+                && !existingEndTime.isBefore(newEndTime);
+        boolean existingInsideNew =
+                existingStartTime.isAfter(newStartTime) && existingEndTime.isBefore(newEndTime);
+        boolean existingCutsNewStart = !existingStartTime.isAfter(newStartTime) &&
+                existingEndTime.isAfter(newStartTime) &&
+                existingEndTime.isBefore(newEndTime);
+        boolean existingCutsNewEnd =
+                existingStartTime.isAfter(newStartTime) &&
+                        existingStartTime.isBefore(newEndTime) &&
+                        !existingEndTime.isBefore(newEndTime);
+
+        if (existingCoversNew) {
+            newRecord.updateTimeRange(newStartTime, newStartTime);
+        } else if (existingInsideNew) {
+            toCreate.add(newRecord.copyWithNewTimeRange(newStartTime, existingStartTime));
+
+            newRecord.updateTimeRange(existingEndTime, newEndTime);
+        } else if (existingCutsNewStart) {
+            newRecord.updateTimeRange(existingEndTime, newEndTime);
+        } else if (existingCutsNewEnd) {
+            newRecord.updateTimeRange(newStartTime, existingStartTime);
+        }
+
     }
 }
