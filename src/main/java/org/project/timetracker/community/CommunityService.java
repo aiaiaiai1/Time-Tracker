@@ -67,4 +67,16 @@ public class CommunityService {
                 goal,
                 categoriesText);
     }
+
+
+    public List<UserData> findSimilarUsers(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 유저 입니다."));
+
+        List<User> users = userRepository.findAllByGoalCategoryId(user.getGoalCategoryId());
+        return users.stream()
+                .map(u -> new UserData(u.getId(), u.getUsername()))
+                .toList();
+
+    }
 }
