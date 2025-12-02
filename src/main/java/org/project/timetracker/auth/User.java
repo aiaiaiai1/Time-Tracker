@@ -21,6 +21,9 @@ public class User {
     @Column(nullable = false)
     private String username;
 
+    @Column
+    private String goal;
+
     public User(String loginId, String password, String username) {
         this.loginId = loginId;
         this.password = password;
@@ -30,4 +33,9 @@ public class User {
     public User() {
 
     }
+
+    public void setGoal(String goal) {
+        this.goal = goal;
+    }
+
 }
