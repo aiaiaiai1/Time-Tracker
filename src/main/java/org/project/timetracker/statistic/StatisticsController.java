@@ -103,6 +103,51 @@ public class StatisticsController {
 
         return String.format("%02d:%02d", hours, minutes);
     }
+
+
+    @PostMapping("/api/compare")
+    public ResponseEntity<ComparingResponse> getStatistics(@RequestBody ComparingRequest request) {
+        Long userId = tokenProcessor.parseToken(request.getToken());
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        User target = userRepository.findById(request.getUserId())
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        List<ActivityRecord> activityRecords = activityRecordRepository.findAllByUserId(user.getId());
+        Map<String, StatistcsData> statisticsByCategory = statisticsCalculator.getStatisticsByCategory(activityRecords);
+        long userTotalMinutes = statisticsByCategory.values().stream()
+                .mapToLong(StatistcsData::getAmount)
+                .sum();
+        List<CategoryData> myData = getCategoryData(statisticsByCategory, userTotalMinutes);
+
+        List<ActivityRecord> targetActivityRecords = activityRecordRepository.findAllByUserId(target.getId());
+        Map<String, StatistcsData> targetStatisticsByCategory = statisticsCalculator.getStatisticsByCategory(targetActivityRecords);
+        long targetTotalMinutes = targetStatisticsByCategory.values().stream()
+                .mapToLong(StatistcsData::getAmount)
+                .sum();
+
+        List<CategoryData> targetCategoryData = getCategoryData(targetStatisticsByCategory, targetTotalMinutes);
+
+        List<UserTimeData> userTimeData = List.of(
+                new UserTimeData(user.getUsername(), (int) userTotalMinutes, myData),
+                new UserTimeData(target.getUsername().substring(0, 2) + "***", (int) targetTotalMinutes, targetCategoryData)
+        );
+
+        return ResponseEntity.ok(new ComparingResponse(true, userTimeData));
+    }
+
+    private List<CategoryData> getCategoryData(Map<String, StatistcsData> statisticsByCategory, long totalMinutes) {
+        List<CategoryData> categoryData = new ArrayList<>();
+        for (Map.Entry<String, StatistcsData> entry : statisticsByCategory.entrySet()) {
+            String category = entry.getKey();
+            long amount = entry.getValue().getAmount();
+            double percent = Math.round((float) amount / totalMinutes * 100);
+            categoryData.add(new CategoryData(category, (int) amount, percent));
+        }
+        return categoryData;
+    }
 }
+
 
 

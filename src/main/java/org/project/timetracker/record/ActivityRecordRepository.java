@@ -25,4 +25,8 @@ public interface ActivityRecordRepository extends JpaRepository<ActivityRecord, 
             @Param("userId") Long userId,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);
+
+
+    List<ActivityRecord> findAllByUserId(Long userId);
+
 }
