@@ -20,7 +20,7 @@ public record ActivityRecordCreateRequest(
                 aiRequest.endTime(),
                 category,
                 aiRequest.memo(),
-                "USER" //카테고리 추천 ai 방식은 유저가 하는 것
+                aiRequest.source()
         );
     }
 }

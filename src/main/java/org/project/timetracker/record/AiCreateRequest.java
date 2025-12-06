@@ -5,6 +5,7 @@ public record AiCreateRequest(
         String date,
         String startTime,
         String endTime,
-        String memo
+        String memo,
+        String source
 ) {
 }
