@@ -3,6 +3,8 @@ package org.project.timetracker.auth;
 import jakarta.persistence.*;
 import lombok.Getter;
 
+import java.util.Objects;
+
 @Entity
 @Getter
 @Table(name = "uuser")
@@ -45,4 +47,15 @@ public class User {
         this.goalCategoryId = goalCategoryId;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        User user = (User) o;
+        return Objects.equals(getId(), user.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(getId());
+    }
 }

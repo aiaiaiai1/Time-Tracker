@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -111,9 +112,6 @@ public class StatisticsController {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        User target = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-
         List<ActivityRecord> activityRecords = activityRecordRepository.findAllByUserId(user.getId());
         Map<String, StatistcsData> statisticsByCategory = statisticsCalculator.getStatisticsByCategory(activityRecords);
         long userTotalMinutes = statisticsByCategory.values().stream()
@@ -121,18 +119,25 @@ public class StatisticsController {
                 .sum();
         List<CategoryData> myData = getCategoryData(statisticsByCategory, userTotalMinutes);
 
-        List<ActivityRecord> targetActivityRecords = activityRecordRepository.findAllByUserId(target.getId());
-        Map<String, StatistcsData> targetStatisticsByCategory = statisticsCalculator.getStatisticsByCategory(targetActivityRecords);
-        long targetTotalMinutes = targetStatisticsByCategory.values().stream()
-                .mapToLong(StatistcsData::getAmount)
-                .sum();
+        List<UserTimeData> userTimeData = new ArrayList<>();
 
-        List<CategoryData> targetCategoryData = getCategoryData(targetStatisticsByCategory, targetTotalMinutes);
+        List<User> users = userRepository.findAllByGoalCategoryId(user.getGoalCategoryId());
+        users.remove(user);
 
-        List<UserTimeData> userTimeData = List.of(
-                new UserTimeData(user.getUsername(), (int) userTotalMinutes, myData),
-                new UserTimeData(target.getUsername().substring(0, 2) + "***", (int) targetTotalMinutes, targetCategoryData)
-        );
+        for (User target : users) {
+            List<ActivityRecord> targetActivityRecords = activityRecordRepository.findAllByUserId(target.getId());
+            Map<String, StatistcsData> targetStatisticsByCategory = statisticsCalculator.getStatisticsByCategory(targetActivityRecords);
+            long targetTotalMinutes = targetStatisticsByCategory.values().stream()
+                    .mapToLong(StatistcsData::getAmount)
+                    .sum();
+            List<CategoryData> targetCategoryData = getCategoryData(targetStatisticsByCategory, targetTotalMinutes);
+            userTimeData.add(
+                    new UserTimeData(target.getUsername().substring(0, 2) + "***", (int) targetTotalMinutes, targetCategoryData)
+            );
+        }
+
+        userTimeData.sort(Comparator.comparing(UserTimeData::getTotalMinutes).reversed());
+        userTimeData.addFirst(new UserTimeData(user.getUsername(), (int) userTotalMinutes, myData));
 
         return ResponseEntity.ok(new ComparingResponse(true, userTimeData));
     }

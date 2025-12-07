@@ -8,10 +8,8 @@ import lombok.NoArgsConstructor;
 public class ComparingRequest {
 
     private String token;
-    private Long userId;
 
-    public ComparingRequest(String token, Long userId) {
+    public ComparingRequest(String token) {
         this.token = token;
-        this.userId = userId;
     }
 }
