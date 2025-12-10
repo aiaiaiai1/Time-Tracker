@@ -30,7 +30,7 @@ public class StatisticsController {
     private final StatisticsCalculator statisticsCalculator;
 
     @PostMapping("/api/statistics")
-    public ResponseEntity<StatisticsResponse> getStatistics(@RequestBody StatisticsRequest request) {
+    public ResponseEntity<StatisticsResponse> getStatisticsForComparing(@RequestBody StatisticsRequest request) {
         Long userId = tokenProcessor.parseToken(request.getToken());
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
@@ -106,8 +106,8 @@ public class StatisticsController {
     }
 
 
-    @PostMapping("/api/compare")
-    public ResponseEntity<ComparingResponse> getStatistics(@RequestBody ComparingRequest request) {
+    @PostMapping("/api/compare/v2")
+    public ResponseEntity<ComparingResponse> getStatisticsForComparing(@RequestBody ComparingRequest request) {
         Long userId = tokenProcessor.parseToken(request.getToken());
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
@@ -152,6 +152,43 @@ public class StatisticsController {
         }
         return categoryData;
     }
+
+    @PostMapping("/api/compare")
+    public ResponseEntity<ComparingResponse> getStatisticsForComparingByClassifiedGoal(@RequestBody ComparingRequest request) {
+        Long userId = tokenProcessor.parseToken(request.getToken());
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        List<ActivityRecord> activityRecords = activityRecordRepository.findAllByUserId(user.getId());
+        Map<String, StatistcsData> statisticsByCategory = statisticsCalculator.getStatisticsByCategory(activityRecords);
+        long userTotalMinutes = statisticsByCategory.values().stream()
+                .mapToLong(StatistcsData::getAmount)
+                .sum();
+        List<CategoryData> myData = getCategoryData(statisticsByCategory, userTotalMinutes);
+
+        List<UserTimeData> userTimeData = new ArrayList<>();
+
+        List<User> users = userRepository.findAllByClassifiedGoal(user.getClassifiedGoal());
+        users.remove(user);
+
+        for (User target : users) {
+            List<ActivityRecord> targetActivityRecords = activityRecordRepository.findAllByUserId(target.getId());
+            Map<String, StatistcsData> targetStatisticsByCategory = statisticsCalculator.getStatisticsByCategory(targetActivityRecords);
+            long targetTotalMinutes = targetStatisticsByCategory.values().stream()
+                    .mapToLong(StatistcsData::getAmount)
+                    .sum();
+            List<CategoryData> targetCategoryData = getCategoryData(targetStatisticsByCategory, targetTotalMinutes);
+            userTimeData.add(
+                    new UserTimeData(target.getUsername().substring(0, 2) + "***", (int) targetTotalMinutes, target.getClassifiedGoal(), targetCategoryData)
+            );
+        }
+
+        userTimeData.sort(Comparator.comparing(UserTimeData::getTotalMinutes).reversed());
+        userTimeData.addFirst(new UserTimeData(user.getUsername(), (int) userTotalMinutes, user.getClassifiedGoal(), myData));
+
+        return ResponseEntity.ok(new ComparingResponse(true, userTimeData));
+    }
+
 }
 
 

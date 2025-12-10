@@ -12,4 +12,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByLoginId(String loginId);
 
     List<User> findAllByGoalCategoryId(Long goalCategoryId);
+
+    List<User> findAllByClassifiedGoal(String classifiedGoal);
 }

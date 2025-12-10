@@ -29,6 +29,9 @@ public class User {
     @Column
     private Long goalCategoryId;
 
+    @Column
+    private String classifiedGoal;
+
     public User(String loginId, String password, String username) {
         this.loginId = loginId;
         this.password = password;
@@ -37,6 +40,10 @@ public class User {
 
     public User() {
 
+    }
+
+    public void setClassifiedGoal(String classifiedGoal) {
+        this.classifiedGoal = classifiedGoal;
     }
 
     public void setGoal(String goal) {
