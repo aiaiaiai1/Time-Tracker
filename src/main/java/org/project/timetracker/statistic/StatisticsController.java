@@ -179,12 +179,12 @@ public class StatisticsController {
                     .sum();
             List<CategoryData> targetCategoryData = getCategoryData(targetStatisticsByCategory, targetTotalMinutes);
             userTimeData.add(
-                    new UserTimeData(target.getUsername().substring(0, 2) + "***", (int) targetTotalMinutes, target.getClassifiedGoal(), targetCategoryData)
+                    new UserTimeData(target.getUsername().substring(0, 2) + "***", (int) targetTotalMinutes, target.getGoal(), targetCategoryData)
             );
         }
 
         userTimeData.sort(Comparator.comparing(UserTimeData::getTotalMinutes).reversed());
-        userTimeData.addFirst(new UserTimeData(user.getUsername(), (int) userTotalMinutes, user.getClassifiedGoal(), myData));
+        userTimeData.addFirst(new UserTimeData(user.getUsername(), (int) userTotalMinutes, user.getGoal(), myData));
 
         return ResponseEntity.ok(new ComparingResponse(true, userTimeData));
     }
