@@ -132,7 +132,7 @@ public class StatisticsController {
                     .sum();
             List<CategoryData> targetCategoryData = getCategoryData(targetStatisticsByCategory, targetTotalMinutes);
             userTimeData.add(
-                    new UserTimeData(target.getUsername().substring(0, 2) + "***", (int) targetTotalMinutes, target.getGoal(), targetCategoryData)
+                    new UserTimeData(target.getUsername(), (int) targetTotalMinutes, target.getGoal(), targetCategoryData)
             );
         }
 
@@ -179,7 +179,7 @@ public class StatisticsController {
                     .sum();
             List<CategoryData> targetCategoryData = getCategoryData(targetStatisticsByCategory, targetTotalMinutes);
             userTimeData.add(
-                    new UserTimeData(target.getUsername().substring(0, 2) + "***", (int) targetTotalMinutes, target.getGoal(), targetCategoryData)
+                    new UserTimeData(target.getUsername(), (int) targetTotalMinutes, target.getGoal(), targetCategoryData)
             );
         }
 
