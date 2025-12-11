@@ -31,7 +31,7 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<RegisterResponse> register(@RequestBody RegisterRequest registerRequest) {
         try {
-            User user = new User(registerRequest.getEmail(), registerRequest.getPassword(), registerRequest.getPassword());
+            User user = new User(registerRequest.getEmail(), registerRequest.getPassword(), registerRequest.getName());
             userRepository.save(user);
             String accessToken = tokenProcessor.generateAccessToken(user.getId());
             RegisterResponse response = new RegisterResponse(true, "회원가입 성공", accessToken);
