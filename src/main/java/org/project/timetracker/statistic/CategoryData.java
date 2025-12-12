@@ -15,4 +15,13 @@ public class CategoryData {
         this.minutes = minutes;
         this.percent = percent;
     }
+
+    @Override
+    public String toString() {
+        return "CategoryData{" +
+                "category='" + category + '\'' +
+                ", minutes=" + minutes +
+                ", percent=" + percent +
+                '}';
+    }
 }
