@@ -6,6 +6,7 @@ import org.project.timetracker.auth.User;
 import org.project.timetracker.auth.UserRepository;
 import org.project.timetracker.record.ActivityRecord;
 import org.project.timetracker.record.ActivityRecordRepository;
+import org.springframework.ai.vertexai.gemini.VertexAiGeminiChatModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
@@ -28,6 +30,7 @@ public class StatisticsController {
     private final UserRepository userRepository;
     private final ActivityRecordRepository activityRecordRepository;
     private final StatisticsCalculator statisticsCalculator;
+    private final VertexAiGeminiChatModel chatModel;
 
     @PostMapping("/api/statistics")
     public ResponseEntity<StatisticsResponse> getStatisticsForComparing(@RequestBody StatisticsRequest request) {
@@ -118,6 +121,9 @@ public class StatisticsController {
                 .mapToLong(StatistcsData::getAmount)
                 .sum();
         List<CategoryData> myData = getCategoryData(statisticsByCategory, userTotalMinutes);
+        String myDataResult = myData.stream()
+                .map(CategoryData::toString)
+                .collect(Collectors.joining(", "));
 
         List<UserTimeData> userTimeData = new ArrayList<>();
 
@@ -131,13 +137,20 @@ public class StatisticsController {
                     .mapToLong(StatistcsData::getAmount)
                     .sum();
             List<CategoryData> targetCategoryData = getCategoryData(targetStatisticsByCategory, targetTotalMinutes);
+
+            String targetDataResult = targetCategoryData.stream()
+                    .map(CategoryData::toString)
+                    .collect(Collectors.joining(", "));
+
+            String summary = createPromptAndSend(myDataResult, targetDataResult);
+
             userTimeData.add(
-                    new UserTimeData(target.getUsername(), (int) targetTotalMinutes, target.getGoal(), targetCategoryData)
+                    new UserTimeData(target.getUsername(), (int) targetTotalMinutes, target.getGoal(), targetCategoryData, summary)
             );
         }
 
         userTimeData.sort(Comparator.comparing(UserTimeData::getTotalMinutes).reversed());
-        userTimeData.addFirst(new UserTimeData(user.getUsername(), (int) userTotalMinutes, user.getGoal(), myData));
+        userTimeData.addFirst(new UserTimeData(user.getUsername(), (int) userTotalMinutes, user.getGoal(), myData, createPromptAndSend(myDataResult)));
 
         return ResponseEntity.ok(new ComparingResponse(true, userTimeData));
     }
@@ -165,6 +178,10 @@ public class StatisticsController {
                 .mapToLong(StatistcsData::getAmount)
                 .sum();
         List<CategoryData> myData = getCategoryData(statisticsByCategory, userTotalMinutes);
+        String myDataResult = myData.stream()
+                .map(CategoryData::toString)
+                .collect(Collectors.joining(", "));
+
 
         List<UserTimeData> userTimeData = new ArrayList<>();
 
@@ -178,13 +195,19 @@ public class StatisticsController {
                     .mapToLong(StatistcsData::getAmount)
                     .sum();
             List<CategoryData> targetCategoryData = getCategoryData(targetStatisticsByCategory, targetTotalMinutes);
+            String targetDataResult = targetCategoryData.stream()
+                    .map(CategoryData::toString)
+                    .collect(Collectors.joining(", "));
+
+            String summary = createPromptAndSend(myDataResult, targetDataResult);
+
             userTimeData.add(
-                    new UserTimeData(target.getUsername(), (int) targetTotalMinutes, target.getGoal(), targetCategoryData)
+                    new UserTimeData(target.getUsername(), (int) targetTotalMinutes, target.getGoal(), targetCategoryData, summary)
             );
         }
 
         userTimeData.sort(Comparator.comparing(UserTimeData::getTotalMinutes).reversed());
-        userTimeData.addFirst(new UserTimeData(user.getUsername(), (int) userTotalMinutes, user.getGoal(), myData));
+        userTimeData.addFirst(new UserTimeData(user.getUsername(), (int) userTotalMinutes, user.getGoal(), myData, createPromptAndSend(myDataResult)));
 
         return ResponseEntity.ok(new ComparingResponse(true, userTimeData));
     }
@@ -195,6 +218,47 @@ public class StatisticsController {
         }
         return Math.round((float) numerator / denominator * 100);
     }
+    private String createPromptAndSend(String user, String target) {
+        String message = String.format("""
+                         너는 전문 시간 관리 코치이자 사용자의 시간 기록을 비교하여 요약해주는 컨설턴트야.
+                         사용자와 다른 사용자의 시간 기록을 보고 사용자의 입장에서 다른 사용자와 비교했을때 어떠한지를 요약해줘야해.
+                         아래 [사용자의 시간 기록 데이터], [다른 사용자의 시간 기록 데이터]를 보고 사용자를 위한 한줄 요약을 작성해 줘.
+                         [시간 기록 데이터]는 사용자의 모든 실제 기록을 시간순으로 정렬한 목록이야.
+                        
+                         [사용자의 시간 기록 데이터]
+                         %s
+                        
+                         [다른 사용자의 시간 기록 데이터]
+                         %s
+                        
+                         [요약 작성 가이드]
+                         1. 사용자에 초점을 맞춰서 다른 사용자의 기록과 비교했을때 어떠한지를 구체적으로 항목을 언급하고 비교해서 요약해 줘.
+                         다른 사용자는 '해당 사용자' 라고 언급해줘
+                         ex) 해당 사용자에 비해 ... 
+                        
+                        """,
+                user,
+                target
+        );
+        return chatModel.call(message);
+    }
+
+    private String createPromptAndSend(String user) {
+        String message = String.format("""
+                         너는 전문 시간 관리 코치이자 사용자의 활동 기록을 보고 간단하게 요약해줘야해.
+                         아래 [사용자의 시간 기록 데이터]를 보고 사용자가 한눈에 알아보기 쉽게 요약해줘
+                         [시간 기록 데이터]는 사용자의 모든 실제 기록을 시간순으로 정렬한 목록이야.
+                         1~2줄로 아주 핵심적인부분만 요약해야해
+                        
+                         [사용자의 시간 기록 데이터]
+                         %s
+                        
+                        """,
+                user
+        );
+        return chatModel.call(message);
+    }
+
 }
 
 
