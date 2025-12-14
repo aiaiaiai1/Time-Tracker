@@ -75,8 +75,8 @@ public class StatisticsController {
 
             String formattedAmount = getFormattedAmount(amount);
 
-            long timePercent = Math.round((float) amount / amountTotal * 100);
-            long accordPercent = Math.round((float) amount / timeTotal * 100);
+            long timePercent = calculatePercent(amount, amountTotal);
+            long accordPercent = calculatePercent(amount, timeTotal);
 
             Map<String, StatisticsDetailData> detailMaps = detailResults.get(category);
 
@@ -147,7 +147,7 @@ public class StatisticsController {
         for (Map.Entry<String, StatistcsData> entry : statisticsByCategory.entrySet()) {
             String category = entry.getKey();
             long amount = entry.getValue().getAmount();
-            double percent = Math.round((float) amount / totalMinutes * 100);
+            double percent = calculatePercent(amount, totalMinutes);
             categoryData.add(new CategoryData(category, (int) amount, percent));
         }
         return categoryData;
@@ -189,6 +189,12 @@ public class StatisticsController {
         return ResponseEntity.ok(new ComparingResponse(true, userTimeData));
     }
 
+    private long calculatePercent(long numerator, long denominator) {
+        if (denominator == 0) {
+            return 0;
+        }
+        return Math.round((float) numerator / denominator * 100);
+    }
 }
 
 

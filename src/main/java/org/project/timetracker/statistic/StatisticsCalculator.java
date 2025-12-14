@@ -48,9 +48,9 @@ public class StatisticsCalculator {
 
             for (Map.Entry<String, List<ActivityRecord>> groupByNameMaps : groupByName.entrySet()) {
                 String name = groupByNameMaps.getKey();
-                List<ActivityRecord> values = maps.getValue();
+                List<ActivityRecord> values = groupByNameMaps.getValue();
                 int frequency = values.size();
-                long amount = records.stream().mapToLong(ActivityRecord::getSpanMinutes)
+                long amount = values.stream().mapToLong(ActivityRecord::getSpanMinutes)
                         .sum();
 
                 results.put(name, new StatisticsDetailData(frequency, amount));
@@ -59,4 +59,4 @@ public class StatisticsCalculator {
         }
         return finalResults;
     }
-    }
+}
