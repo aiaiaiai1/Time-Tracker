@@ -76,6 +76,9 @@ public class ActivityRecord {
     }
 
     public long getSpanMinutes() {
+        if (endTime.isBefore(startTime)) {
+            return 0;
+        }
         Duration span = Duration.between(startTime, endTime);
         return span.toMinutes();
     }
